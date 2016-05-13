@@ -1,5 +1,5 @@
 # Waits for control unit to send a message, which may contain
-# config options. Fetches new Reddit Posts on recieve, and send
+# config options. Fetches New Reddit Posts on recieve, and send
 # back JSON to control unit.
 
 import calendar
@@ -11,7 +11,7 @@ import time
 import urllib2
 
 
-LOG_FILENAME = 'RedditPostMinerDebug.log'
+LOG_FILENAME = 'reddit_post_miner_debug.log'
 HOST_IP = 'localhost'
 PORT = 3000
 SUBREDDIT = 'TIFU'
@@ -20,7 +20,7 @@ REQUEST_HEADER = { 'User-Agent' : 'RedditPostPopularityPredictor' }
 
 
 # Function retrieves data/details for a specific Reddit user.
-def fetchUserData(username):
+def getUserData(username):
     userData = {}
 
     userAccountUrl = 'https://www.reddit.com/user/' + username +'/about.json'
@@ -38,7 +38,7 @@ def fetchUserData(username):
 
     return userData
 
-def fetchPostSelfText(postUrl):
+def getPostSelfText(postUrl):
     postUrlJSON = postUrl + '.json'
     req = urllib2.Request(postUrlJSON, headers=REQUEST_HEADER)
     postInfoJSON = urllib2.urlopen(req)
@@ -51,7 +51,7 @@ def fetchPostSelfText(postUrl):
 # Function retrieves new posts that are younger than TIME_ALIVE_UPPER_BOUND
 # milliseconds from a given Subreddit.
 # A JSON object representing the new posts is returned.
-def fetchNewPosts():
+def getNewPosts():
     newPostsData = []
 
     newPostsUrl = 'http://www.reddit.com/r/' + SUBREDDIT + '/new.json?sort=new'
@@ -77,9 +77,9 @@ def fetchNewPosts():
             postData['id'] = postId
             postData['created_utc'] = postDateCreated
 			
-            postData['selftext'] = fetchPostSelfText(postUrl)
+            postData['selftext'] = getPostSelfText(postUrl)
 
-            userData = fetchUserData(postAuthor)
+            userData = getUserData(postAuthor)
             postData['author'] = userData
             postData['author']['name'] = postAuthor
 
@@ -124,7 +124,7 @@ while True:
           logger.debug('Config changed')
      
      # Fetch new posts
-     newPostsDataJSON = fetchNewPosts()
+     newPostsDataJSON = getNewPosts()
      logger.debug('Fetched new posts')
 
      message = newPostsDataJSON
