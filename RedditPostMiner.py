@@ -16,6 +16,37 @@ HOST_IP = 'localhost'
 PORT = 3000
 SUBREDDIT = 'TIFU'
 TIME_ALIVE_UPPER_BOUND = 10000
+REQUEST_HEADER = { 'User-Agent' : 'RedditPostPopularityPredictor' }
+
+
+# Function retrieves data/details for a specific Reddit user.
+def fetchUserData(username):
+    userData = {}
+
+    userAccountUrl = 'https://www.reddit.com/user/' + username +'/about.json'
+    req = urllib2.Request(userAccountUrl, headers=REQUEST_HEADER)
+    userInfoJSON = urllib2.urlopen(req)
+    userInfo = json.load(userInfoJSON)
+
+    userDetails = userInfo['data']
+
+    userData['created_utc'] = userDetails['created_utc']
+    userData['link_karma'] = userDetails['link_karma']
+    userData['comment_karma'] = userDetails['comment_karma']
+    userData['is_gold'] = userDetails['is_gold']
+    userData['id'] = userDetails['id']
+
+    return userData
+
+def fetchPostSelfText(postUrl):
+    postUrlJSON = postUrl + '.json'
+    req = urllib2.Request(postUrlJSON, headers=REQUEST_HEADER)
+    postInfoJSON = urllib2.urlopen(req)
+    postInfo = json.load(postInfoJSON)
+
+    postSelfText = postInfo[0]['data']['children'][0]['data']['selftext']
+
+    return postSelfText
 
 # Function retrieves new posts that are younger than TIME_ALIVE_UPPER_BOUND
 # milliseconds from a given Subreddit.
@@ -24,31 +55,33 @@ def fetchNewPosts():
     newPostsData = []
 
     newPostsUrl = 'http://www.reddit.com/r/' + SUBREDDIT + '/new.json?sort=new'
-    reqHeader = { 'User-Agent' : 'RedditPostPopularityPredictor' }
-    req = urllib2.Request(newPostsUrl, headers=reqHeader)
-	newPostsJSON = urllib2.urlopen(req)
+    req = urllib2.Request(newPostsUrl, headers=REQUEST_HEADER)
+    newPostsJSON = urllib2.urlopen(req)
 
 	#Python dict storing the new posts
-    newPosts = json.load(newPosts)
+    newPosts = json.load(newPostsJSON)
 
     for post in newPosts['data']['children']:
     	postDetails = post['data']
 
-		postAuthor = postDetails['author']
-		postKarma = 0
-		postDateCreated = postDetails['created_utc']
-		postTitle = postDetails['title']
-		postURL = postDetails['url']
-		postId = postDetails['id']
+        postAuthor = postDetails['author']
+        postDateCreated = postDetails['created_utc']
+        postTitle = postDetails['title']
+        postUrl = postDetails['url']
+        postId = postDetails['id']
 
-		if (calendar.timegm(time.gmtime()) - postDateCreated) < TIME_ALIVE_UPPER_BOUND:
+        if (calendar.timegm(time.gmtime()) - postDateCreated) < TIME_ALIVE_UPPER_BOUND:
 			postData = {}
-			postData['title'] = postTitle
-			postData['author'] = postAuthor
-			postData['karma'] = postKarma
-			postData['url'] = postURL
-			postData['id'] = postId
-			postData['created_utc'] = postDateCreated
+			postData['title'] = postTitle    
+            postData['url'] = postUrl
+            postData['id'] = postId
+            postData['created_utc'] = postDateCreated
+			
+            postData['selftext'] = fetchPostSelfText(postUrl)
+
+            userData = fetchUserData(postAuthor)
+            postData['author'] = userData
+            postData['author']['name'] = postAuthor
 
 			newPostsData.append(postData)
 
@@ -65,6 +98,8 @@ handler.setFormatter(formatter)
 logger.addHandler(handler) 
 logger.setLevel(logging.DEBUG)
  
+logger.debug('\n\n' + '=================     ALIVE     =================' + '\n')
+
 try:
     RedditPostMinerSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 except socket.error:
