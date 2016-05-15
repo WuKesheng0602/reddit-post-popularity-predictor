@@ -27,7 +27,7 @@ POST_LENGTH_MAX = 3000  # 3000 characters
 TITLE_LENGTH_MAX = 140  # 140 characters
 
 
-HOST = '127.0.0.1'
+DB_HOST = '127.0.0.1'
 DB_USER = 'root'
 DB_PASS = ''
 DB_NAME = 'Reddit_Post_Popularity_Predictor'
@@ -160,7 +160,7 @@ FeatureExtractorSocket.connect( (HOST_IP , PORT) )
  
 logger.debug('Socket connected to' + HOST_IP + 'on ' + str(PORT))
 
-db = MySQLdb.connect(host=HOST,    
+db = MySQLdb.connect(host=DB_HOST,    
                  user=DB_USER,       
                  passwd=DB_PASS,  
                  db=DB_NAME)   
@@ -170,6 +170,8 @@ logger.debug('Database connection established')
 # cursor for executing queries
 cursor = db.cursor()
 
+# TODO: Make numberOfFeatures a configuration property
+# sent from the control unit
 query = 'SELECT COUNT(*) FROM ' + TABLE_NAME + ';'
 cursor.execute(query)
 

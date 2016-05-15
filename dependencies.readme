@@ -9,5 +9,19 @@ MySQLdb module for python to connect to MySQL:
 six module for python for RAKE:
 	sudo pip install six
 
+Keras module for Neural Networks (build on Therano):
+	sudo pip install keras
+
+
+
+scientific computation
+numpy
+
+Data visualization and analysis
+
+seaborn
+pandas
+matplotlib
+
 MySQL Database
 Python 2.7
