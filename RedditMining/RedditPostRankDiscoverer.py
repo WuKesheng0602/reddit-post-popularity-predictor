@@ -65,7 +65,7 @@ logger.debug('Socket created successfully')
 
 RedditPostRankDiscovererSocket.connect( (HOST_IP , PORT) )
  
-logger.debug('Socket connected to' + HOST_IP + 'on ' + PORT)
+logger.debug('Socket connected to' + HOST_IP + 'on ' + str(PORT))
  
 while True:
      # Waiting for messages from Control (blocking)

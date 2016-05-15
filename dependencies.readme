@@ -3,8 +3,11 @@ Dependencies:
 Pip to manage python packages:
 	sudo port install py27-pip
 
-MySQLdb for python to connect to MySQL:
+MySQLdb module for python to connect to MySQL:
 	sudo pip install MySQL-python
+
+six module for python for RAKE:
+	sudo pip install six
 
 MySQL Database
 Python 2.7
