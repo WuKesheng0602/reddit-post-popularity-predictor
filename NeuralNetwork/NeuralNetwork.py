@@ -47,57 +47,53 @@ logger.debug('\n\n' + '=================     ALIVE     =================' + '\n'
 
 predictionModel = None
 trainingModel = None
-networkReady = False
-trainingNetworkReady = False
+firstNetworkReady = False
+newNetworkTrained = False
 
-def loadSavedModel():
+def loadSavedModelAsTrainingModel():
     savedModelArchitectureFile = open(SAVED_MODEL_ARCHITECTURE_JSON)
     savedModelArchitectureJSON = savedModelArchitectureFile.read()
     savedModelArchitectureFile.close()
 
-    model = model_from_json(savedModelArchitectureJSON)
-    model.load_weights(SAVED_MODEL_WEIGHTS_H5)
-    model.compile(
+    trainingModel = model_from_json(savedModelArchitectureJSON)
+    trainingModel.load_weights(SAVED_MODEL_WEIGHTS_H5)
+    trainingModel.compile(
         optimizer=MODEL_OPTIMIZER, 
         loss=MODEL_LOSS
         )
 
-    return model
-
-def saveModel(model):
+def savePredictionModel():
     modelArchitectureJSON = predictionModel.to_json()
 
     savedModelArchitectureFile = open(SAVED_MODEL_ARCHITECTURE_JSON, 'w')
     savedModelArchitectureFile.write(modelArchitectureJSON)
     savedModelArchitectureFile.close()
 
-    model.save_weights(SAVED_MODEL_WEIGHTS_H5)
+    predictionModel.save_weights(SAVED_MODEL_WEIGHTS_H5)
 
-def createModel():
-    model = Sequential()
+def createTrainingModel():
+    trainingModel = Sequential()
 
     # First hidden layer with the features as input and 
     # NUMBER_OF_UNITS_HIDDEN_LAYER_1 as hidden units. Uses the sigmoid function.
-    model.add(Dense(
+    trainingModel.add(Dense(
         input_dim=NUMBER_OF_FEATURES,
         output_dim=NUMBER_OF_UNITS_HIDDEN_LAYER_1)
     )
-    model.add(Activation('sigmoid'))
+    trainingModel.add(Activation('sigmoid'))
 
     # Output layer with the softmax activation function, which is similar
     # to sigmoid except that all units must sum to 1.
-    model.add(Dense(
+    trainingModel.add(Dense(
         output_dim=NUMBER_OF_CLASSES)
     )
-    model.add(Activation('softmax'))
+    trainingModel.add(Activation('softmax'))
 
     # Compiles the model to run effificiently on CPU/GPU
-    model.compile(
+    trainingModel.compile(
         loss=MODEL_LOSS, 
         optimizer=MODEL_OPTIMIZER
         )
-
-    return model
 
 
 def neuralNetworkTrainingThread():
@@ -113,7 +109,57 @@ def neuralNetworkTrainingThread():
      
     logger.debug('Training socket connected to' + HOST_IP + 'on ' + str(PORT))
 
+    while True:
+        trainingOptionsJSON = NeuralNetworkTrainingSocket.recv(16384*4)
+        
+        logger.debug('Training message recieved from Control')
 
+        trainingOptions = json.load(trainingOptionsJSON)
+        trainingModelConfig = trainingOptions['model_config']
+
+        if trainingOptions['load_model'] == 'new':
+            NUMBER_OF_FEATURES = trainingModelConfig['number_of_features']
+            NUMBER_OF_CLASSES = trainingModelConfig['number_of_classes']
+            NUMBER_OF_UNITS_HIDDEN_LAYER_1 = trainingModelConfig['number_of_units_hidden_layer_1']
+            MODEL_OPTIMIZER = trainingModelConfig['optimizer']
+            MODEL_LOSS = trainingModelConfig['loss']
+
+            createTrainingModel()
+        elif trainingOptions['load_model'] == 'saved':
+            loadSavedModelAsTrainingModel()
+        elif trainingOptions['load_model'] == 'train':
+            # List of numpy arrays for NN with multiple inputs
+            trainingX = [np.array( trainingOptions['features'] )]
+
+            outputVector = [0] * NUMBER_OF_CLASSES
+
+            # One hot encode with respect to the class that the training 
+            # example belongs to, i.e. class = 4.
+            # TODO: Right now, we are assuming that classes range from 1-5
+            outputVector[ trainingOptions['classification'] - 1 ] = 1-5
+
+            trainingY = [np.array( outputVector )]
+            trainingModel.train_on_batch(trainingX, trainingY)
+
+        newNetworkTrained = True
+        firstNetworkReady = True
+
+        # A new network is trained. Wait until the prediction thread is ready
+        # to acknowledge the new model.
+        while newNetworkTrained:
+            pass
+
+        # Tell control that it is ready for another message/further training
+        acknowledgementMessageToControl = ["READY"]
+        acknowledgementMessageToControlJSON = json.dumps(acknowledgementMessageToControl)
+        message = acknowledgementMessageToControlJSON
+
+        try :
+            NeuralNetworkTrainingSocket.sendall(message)
+        except socket.error:
+            logger.debug('Send failed')
+            sys.exit()
+        logger.debug('Message sent successfully')
 
 
 # Two threads; main thread to listen for prediction prompts,
@@ -121,7 +167,7 @@ def neuralNetworkTrainingThread():
 try:
    thread.start_new_thread( neuralNetworkTrainingThread, () )
 except:
-    logger.error('Failed to start thread')
+    logger.error('Failed to start secondary thread')
 
 
 try:
@@ -138,24 +184,31 @@ logger.debug('Prediction socket connected to' + HOST_IP + 'on ' + str(PORT))
 
 while True:
     # TODO: Create a buffer for recv...for all servers.
-    # will be addressed at a later date!
+    # TODO: Create more sockets for the server, so that different threads listen for different messages on different ports.
     # Waiting for prediction prompts from Control (blocking)
     featuresJSON = NeuralNetworkPredictionSocket.recv(16384*4)
     
-    logger.debug('Message recieved from Control')
+    logger.debug('Prediction message recieved from Control')
+
+    # List of feature values
     features = json.load(featuresJSON)
 
-    # NN not configured yet
-    while not networkReady:
+    # NN not configured yet. Thread will delay here until it is ready.
+    # Control will not pass any further messages until it recieves
+    # a "ready" message from this thread.
+    while not firstNetworkReady:
         pass
 
     # Another version of the NN has been trained.
-    # Replace the main model with the trained version before predicting
-    if trainingNetworkReady:
+    # Replace the main model with the trained version before predicting.
+    if newNetworkTrained:
         predictionModel = trainingModel
-        trainingNetworkReady = False
+        newNetworkTrained = False
 
-    prediction = predictFromFeatures(features)
+        # save new prediction model
+        savePredictionModel()
+
+    prediction = (predictionModel.predict_classes(np.array(features), batch_size=1, verbose=1))[0]
 
     predictionJSON = json.dumps(prediction)
     message = predictionJSON
